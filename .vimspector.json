@@ -1,0 +1,28 @@
+{
+  "configurations": {
+    "Linux Launch": {
+      "adapter": "vscode-cpptools",
+      "configuration": {
+        "name": "Launch",
+        "type": "cppgdb",
+        "request": "launch",
+        "program": "${workspaceRoot}/main",
+        "args": ["test.asm"],
+        "cwd": "${workspaceRoot}",
+        "environment": [],
+        "externalConsole": true,
+        "MIMode": "gdb",
+        "setupCommands": [
+          {
+            "text": "b _start",
+            "ignoreFailures": false
+          },
+          {
+            "text": "b is_reverse_flag",
+            "ignoreFailures": false
+          }
+        ]
+      }
+    }
+  }
+}
