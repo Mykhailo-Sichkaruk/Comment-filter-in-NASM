@@ -1,6 +1,37 @@
 	;         function calling convention - RBP, RBX, R12, R13, R14, R15 are callee-saved
 	;         RDI, RSI, RDX, RCX, R8, R9, XMM0-XMM7 are caller-saved
 	;%include "utils.asm"
+	section   .data
+
+help_msg:
+	db "Usage: ./print_file [file1] [file2] ...", 10, 0
+
+no_args_found_msg:
+	db "No arguments found", 10, 0
+
+reverse_flag_found_msg:
+	db "-r is found", 10, 0
+
+reverse_flag_not_found_msg:
+	db "-r is not found", 10, 0
+
+help_flag:
+	db "-h", 0
+
+reverse_flag:
+	db "-r", 0
+
+is_reversed:
+	dq 0; 1 if -r is present, 0 otherwise
+
+comment_1:
+	db "#", 0
+
+argc:
+	dq 0
+
+argv_p:
+	dq 0
 
 	%macro save_registers 0
 	push   rbx
@@ -10,7 +41,7 @@
 	push   r14
 	push   r15
 	%endmacro
-	%macro restore_registers 1
+	%macro restore_registers 0
 	pop    r15
 	pop    r14
 	pop    r13
@@ -25,12 +56,56 @@
 	extern  compare_str
 	extern  exit
 	extern  print_file
+	extern  print_str_nt
+	extern  print_newline
 	%define print_line print_line
 
 	section .text
 
-	; Assume that argc and argv_p are saved in global variables argc and argv_p
-	; RETURN: RAX = 1 there is -r argument, 0 otherwise
+	; NOTE:
+	; [PARAM] r9: char* argv_fing
+
+find_flag:
+	save_registers
+	mov rcx, [argc]; argc
+	mov rdx, [argv_p]; *argv
+	add rdx, 8; argv_p++; Skip the first argument argv[0] - program name
+	dec rcx; argc-- Skip the first argument argv[0] - program name
+	cmp rcx, 0; argc == 0
+	je  flag_not_found
+	mov r14, [rdx]; current argument
+
+find_flag_body:
+	mov  r8, r14; R8 = argv[x]
+	call compare_str; rax = strcmp(argv[x], "-r")
+	cmp  rax, 1; rax === 1
+	je   flag_found
+	jmp  find_flag_update
+
+find_flag_condition:
+	cmp rcx, 0; argc == 0
+	je  flag_not_found
+	jmp find_flag_body
+
+find_flag_update:
+	dec rcx; argc--
+	add rdx, 8; argv_p++
+	mov r14, [rdx]; current argument
+	jmp find_flag_condition
+
+flag_found:
+	mov rax, 1
+	restore_registers
+	ret
+
+flag_not_found:
+	mov rax, 0
+	restore_registers
+	ret
+
+	; NOTE:: This function checks if -r argument is present in the program arguments
+	; WARN: [ASSUMPTION] that argc and argv_p are saved in global variables argc and argv_p
+	; PERF: [RETURN]: RAX; 1 there is -r argument, 0 otherwise
 
 is_reverse_flag:
 	mov rcx, [argc]; argc
@@ -72,24 +147,40 @@ reverse_flag_not_found:
 iterate_over_files:
 	mov rcx, [argc]; argc
 	mov rdx, [argv_p]; *argv
-	add rdx, 8; argv_p++; Skip the first argument argv[0]
-	dec rcx; argc--; Skip the first argument argv[0]
+	add rdx, 8; argv_p++; Skip the first argument argv[0] - program name
+	dec rcx; argc--; Skip the first argument argv[0] - program name
 	cmp rcx, 0; argc == 0
 	je  no_args_found
 	mov r14, [rdx]; current argument
 
-iterate_over_file_names:
+iofn_body:
 	mov  r8, r14; R8 = argv[x]
 	mov  r9, reverse_flag; R9 = "-r"
 	call compare_str; rax = strcmp(argv[x], "-r")
-	cmp  rax, 1; rax == 1
-	jne  process_file; true: skip this argument
-	dec  rcx; argc--
-	add  rdx, 8; argv_p++
-	mov  r14, [rdx]; current argument
-	jmp  iterate_over_file_names
+	cmp  rax, 1; rax == 0
+	je   iofn_update; if argv[x] == "-r" then
+	call process_file
+	jmp  iofn_update
+
+iofn_condition:
+	cmp rcx, 0; argc == 0
+	je  finish_iterate_over_files
+	jmp iofn_body
+
+iofn_update:
+	dec rcx; argc--
+	add rdx, 8; argv_p++
+	mov r14, [rdx]; current argument
+	jmp iofn_condition
+
+	; NOTE: Process files - print name, open, print content according to the task
+	; [PARAM] R8 = file name
+	; [RETURN] RAX = 0 if file is not found, 1 otherwise
 
 process_file:
+	call print_newline
+	call print_str_nt
+	call print_newline
 	call open_file
 	mov  r8, rax
 	mov  rax, [is_reversed]
@@ -104,39 +195,28 @@ no_args_found:
 finish_iterate_over_files:
 	ret
 
+	; Entry point
+	; [PARAM] RDI = argc
+	; [PARAM] RSI = *argv
+	; [RETURN] RAX = 0
+
 _start:
 	pop  rdi; argc
 	mov  [argc], rdi; argc = argc
 	mov  [argv_p], rsp; argv_p = *argv
+	mov  r9, help_flag
+	;    if (find("-h") === 1) help_flag_found()
+	call find_flag
+	cmp  rax, 1
+	je   help_flag_found
 	call is_reverse_flag
 	call iterate_over_files
 	call exit
 
-	section .data
-
-no_args_found_msg:
-	db "No arguments found", 10, 0
-
-reverse_flag_found_msg:
-	db "-r is found", 10, 0
-
-reverse_flag_not_found_msg:
-	db "-r is not found", 10, 0
-
-reverse_flag:
-	db "-r", 0
-
-is_reversed:
-	dq 0; 1 if -r is present, 0 otherwise
-
-comment_1:
-	db "#", 0
-
-argc:
-	dq 0
-
-argv_p:
-	dq 0
+help_flag_found:
+	mov  r8, help_msg
+	call print_line
+	call exit
 
 	; is_reverse db 0; 1 if -r is present, 0 otherwise
 	; My task is to print files listed in program arguments to the consodle, skipping comments like `#`, ` // ` and `/* */`

@@ -6,7 +6,8 @@ start:
 
 # Run
 run:
-    ./main main.asm
+    # ./main test.asm
+    ./main main.asm utils.asm -h
 
 # Assembly
 asmembly:

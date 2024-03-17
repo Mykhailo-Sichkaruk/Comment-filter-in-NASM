@@ -1,5 +1,5 @@
-	section .bss
 	;       PERF: Axion: when we read file to the buffer, buffer all file is read at once
+	section .bss
 
 buffer:
 	resb 0x10000; Kib
@@ -69,7 +69,8 @@ compare_str_end:
 	pop r8; Restore pointer to the first string
 	ret
 
-	; int_64 strlen(char* str)
+	; NOTE: int print_buff_interval(char* left_p, char* right_p)
+	; int strlen(char* str)
 	; str - pointer to the start of the string must be placed in R8
 	; consdier null-terminated string
 	; return length of the string to the RAX register
@@ -115,13 +116,12 @@ print_str_nt:
 	pop     rdx
 	ret
 
-print_line:
+print_newline:
 	push rdx; save RDX
 	push rax; save rax
-	push rdi
-	push rsi
-	push rcx
-	call print_str_nt
+	push rdi; save rdi
+	push rsi; save rsi
+	push rcx; save rcx
 	mov  rdi, 1; STDOUT
 	mov  rsi, newline; New line character
 	mov  rdx, 1; Length of the string
@@ -134,18 +134,26 @@ print_line:
 	pop  rdx
 	ret
 
+	; NOTE: void print_line(char* str)
+	; str - pointer to the start of the string must be placed in R8
+	; print null-terminated string to the stdout and print new line
+
+print_line:
+	call print_str_nt
+	call print_newline
+	ret
+
 exit:
 	mov     rax, 60; system call for exit
 	xor     rdi, rdi; exit code 0
 	syscall ; invoke operating system to exit
 	ret
 
-	; NOTE: Open file|  int* open(char* file_name)
+	; NOTE: Open file|  int* open(char* file_name). Also prints
 	; r8: char* - file name [PARAM]
 	; rax: int  - file handle [RETURN]
 
 open_file:
-	call print_str_nt
 	push rdi; save rdi
 	push rsi; save rsi
 	push rdx; save rdx
@@ -254,6 +262,7 @@ pbnc_newline:
 	pop  rax; restore rax
 	jne  pbnc_newline_skip; skip interval
 	call print_buff_interval; print interval
+	call print_newline; print new line
 	jmp  pbnc_newline_ret
 
 pbnc_newline_skip:
@@ -329,8 +338,10 @@ comment_found:
 
 comment_found_skip:
 	inc r14; right_p++
+	mov r13, r14; left_p = right_p
 	mov r11, 1; is_comment = true
 	jmp pbnc_iter
+
 	; NOTE: Print string (char* str, int len)
 	; [PARAM] r8: char* - pointer to the string
 	; [PARAM] r9: int   - length of the string
@@ -340,19 +351,19 @@ print_str:
 	push    rax; save rax
 	push    rdi; save rdi
 	push    rsi; save rsi
-	push    rcx
-	mov     rdx, r9; set length of the string
+	push    rcx; save rcx
 	mov     rax, 1; WRITE syscall
 	mov     rdi, 1; set STDOUT as the file descriptor
 	mov     rsi, r8; Prepare pointer to the string
+	mov     rdx, r9; set length of the string
 	syscall ; Print the string
-	cmp     rax, -1
-	je      print_str_error
-	pop     rcx
-	pop     rsi
-	pop     rdi
-	pop     rax
-	pop     rdx
+	cmp     rax, -1; fd == -1
+	je      print_str_error; if yes, print error message
+	pop     rcx; restore rcx
+	pop     rsi; restore rsi
+	pop     rdi; restore rdi
+	pop     rax; restore rax
+	pop     rdx; restore RDX
 	ret
 
 print_str_error:
@@ -364,3 +375,5 @@ print_str_error:
 	global exit
 	global print_file
 	global open_file
+	global print_str_nt
+	global print_newline
