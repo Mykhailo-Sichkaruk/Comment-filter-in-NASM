@@ -7,7 +7,7 @@ start:
 # Run
 run:
     # ./main test.asm
-    ./main main.asm utils.asm -h
+    ./main test.file
 
 # Assembly
 asmembly:

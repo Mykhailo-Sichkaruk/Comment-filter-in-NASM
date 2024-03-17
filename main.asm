@@ -1,10 +1,11 @@
-	;         function calling convention - RBP, RBX, R12, R13, R14, R15 are callee-saved
-	;         RDI, RSI, RDX, RCX, R8, R9, XMM0-XMM7 are caller-saved
-	;%include "utils.asm"
-	section   .data
+	;        function calling convention - RBP, RBX, R12, R13, R14, R15 are callee-saved
+	;        RDI, RSI, RDX, RCX, R8, R9, XMM0-XMM7 are caller-saved
+	%include "macro.asm"
+
+	section .data
 
 help_msg:
-	db "Usage: ./print_file [file1] [file2] ...", 10, 0
+	db "Usage: ./print_file [file1] [file2] ...", 10, "Prints the content of the files to the console", 10, "Options:", 10, "  -r: Reverse the order of the output", 10, "  -h: Show this message", 10, 0
 
 no_args_found_msg:
 	db "No arguments found", 10, 0
@@ -22,7 +23,7 @@ reverse_flag:
 	db "-r", 0
 
 is_reversed:
-	dq 0; 1 if -r is present, 0 otherwise
+	dq 0; 1 - print kjk
 
 comment_1:
 	db "#", 0
@@ -32,23 +33,6 @@ argc:
 
 argv_p:
 	dq 0
-
-	%macro save_registers 0
-	push   rbx
-	push   rbp
-	push   r12
-	push   r13
-	push   r14
-	push   r15
-	%endmacro
-	%macro restore_registers 0
-	pop    r15
-	pop    r14
-	pop    r13
-	pop    r12
-	pop    rbp
-	pop    rbx
-	%endmacro
 
 	global  _start
 	extern  print_line
@@ -66,7 +50,7 @@ argv_p:
 	; [PARAM] r9: char* argv_fing
 
 find_flag:
-	save_registers
+	save_regs  rcx, rdx, r14
 	mov rcx, [argc]; argc
 	mov rdx, [argv_p]; *argv
 	add rdx, 8; argv_p++; Skip the first argument argv[0] - program name
@@ -95,12 +79,12 @@ find_flag_update:
 
 flag_found:
 	mov rax, 1
-	restore_registers
+	restore_regs rcx, rdx, r14
 	ret
 
 flag_not_found:
 	mov rax, 0
-	restore_registers
+	restore_regs rcx, rdx, r14
 	ret
 
 	; NOTE:: This function checks if -r argument is present in the program arguments

@@ -1,16 +1,23 @@
-	;       PERF: Axion: when we read file to the buffer, buffer all file is read at once
+	; PERF: Axion: when we read file to the buffer, buffer all file is read at once
+
+	%include "macro.asm"
+
 	section .bss
 
+	; NOTE: 1MB buffer
+
 buffer:
-	resb 0x10000; Kib
+	resb 0x100000; Buffer for the file content
 
 	section .data
 
 print_non_comments:
-	dq 0x0; Print non-comments flag
+	dq 0x0; 0 - print non-commented strings, 1 - print commented strings
+
+	; NOTE: 1MB buffer length
 
 buffer_length:
-	dq 0x10000; Kib
+	dq 0x100000; Buffer length
 
 newline:
 	db 0xA; New line character
@@ -23,115 +30,95 @@ file_open_error:
 
 error_message:
 	db "Error", 0
-	;  Place start of the first string to r8
-	;  Place start of the second string to r9
-	;  Consider null-terminated strings
-	;  Place 1 in RAX if strings are equal, 0 otherwise
 
 	section .text
 
+	; NOTE: bool compare_str(char* str1, char* str2)
+	; WARN: [PARAM] R8: char* str1 - pointer to the first string
+	; WARN: [PARAM] R9: char* str2 - pointer to the second string
+	; WARN: [LOCAL] CL: char c1    - byte from the first string
+	; WARN: [LOCAL] DL: char c2    - byte from the second string
+	; WARN: [RETURN] RAX: bool     - 1 - strings are equal, 0 - strings are not equal
+
 compare_str:
-	push r8; Save pointer to the first string
-	push r9; Save pointer to the second string
-	push rcx; Save byte from the first string
-	push rdx; Save byte from the second string
+	save_regs r8, r9, rcx, rdx
 
 iter:
-	mov cl, byte [r8]; Load byte from the first string
-	mov dl, byte [r9]; Load byte from the second string
-	cmp cl, 0; Check if it is null-terminator
+	mov cl, byte [r8]; c1 = *str1
+	mov dl, byte [r9]; c2 = *str2
+	cmp cl, 0; c1 === 0
 	je  equal_null_terminated; If yes, strings are equal
-	cmp dl, 0; Check if it is null-terminator
+	cmp dl, 0; c2 === 0
 	je  not_equal; If yes, strings are not equal
-	cmp cl, dl; Compare bytes
+	cmp cl, dl; c1 === c2
 	jne not_equal; If not equal, return 0
-	inc r8; Move to the next byte in the first string
-	inc r9; Move to the next byte in the second string
+	inc r8; str1++
+	inc r9; str2++
 	jmp iter
 
 equal_null_terminated:
-	cmp dl, 0; Check if the second string is null-terminated
+	cmp dl, 0; c2 === 0
 	je  equal; If yes, strings are equal
 	jmp not_equal; If not, strings are not equal
 
 equal:
-	mov rax, 1
+	mov rax, 1; retrun 1
 	jmp compare_str_end
 
 not_equal:
-	mov rax, 0
+	mov rax, 0; return 0
 	jmp compare_str_end
 
 compare_str_end:
-	pop rdx; Restore rdx register that was used to save byte from the second string
-	pop rcx; Restore rcx register that was used to save byte from the first string
-	pop r9; Restore pointer to the second string
-	pop r8; Restore pointer to the first string
+	restore_regs r8, r9, rcx, rdx
 	ret
 
-	; NOTE: int print_buff_interval(char* left_p, char* right_p)
-	; int strlen(char* str)
-	; str - pointer to the start of the string must be placed in R8
-	; consdier null-terminated string
-	; return length of the string to the RAX register
+	; NOTE: int strlen(char* str)
+	; WARN: [PARAM] R8:   char* str   - pointer to the start of the string
+	; WARN: [LOCAL] CL:   char c      - byte from the memory
+	; WARN: [RETURN] RAX: int len     - length of the string
 
 strlen:
-	push r8; Save pointer to the string
-	push rcx; Save byte from the memory
-	mov  rax, 0; Set length to 0
+	save_regs r8, rcx
+	mov rax, 0; len = 0
 
 strlen_iter:
-	mov cl, byte [r8]; Load byte from the memory
-	cmp cl, 0; Check if it is null-terminator
+	mov cl, byte [r8]; c = *str
+	cmp cl, 0; c === 0
 	je  strlen_end; If yes, return
-	inc rax; If not, increment length
-	inc r8; Move to the next byte
+	inc rax; len++
+	inc r8; str++
 	jmp strlen_iter; Repeat
 
 strlen_end:
-	pop rcx; Restore rcx register that was used to save byte from the memory
-	pop r8; Restore pointer to the string
+	restore_regs r8, rcx
 	ret
 
+	; NOTE: Print null-terminated string
 	; NOTE: void print_str_nt(char* str)
-	; str - pointer to the start of the string must be placed in R8
+	; WARN: [PARAM] R8: char* str - pointer to the start of the string
+	; WARN: [LOCAL] RDX: int len  - length of the string
 	; print null-terminated string to the stdout
 
 print_str_nt:
-	push    rdx; save RDX
-	push    rax; save rax
-	push    rdi
-	push    rsi
-	push    rcx
+	save_regs rdx, rax, rdi, rsi, rcx
 	call    strlen; Get length of the string
 	mov     rdx, rax; Move length to the RDX register
 	mov     rax, 1; WRITE syscall
 	mov     rdi, 1; set STDOUT as the file descriptor
 	mov     rsi, r8; Prepare pointer to the string
 	syscall ; Print the string
-	pop     rcx
-	pop     rsi
-	pop     rdi
-	pop     rax
-	pop     rdx
+	restore_regs rdx, rax, rdi, rsi, rcx
 	ret
 
 print_newline:
-	push rdx; save RDX
-	push rax; save rax
-	push rdi; save rdi
-	push rsi; save rsi
-	push rcx; save rcx
-	mov  rdi, 1; STDOUT
-	mov  rsi, newline; New line character
-	mov  rdx, 1; Length of the string
-	mov  rax, 1; WRITE syscall
+	save_regs rdx, rax, rdi, rsi, rcx
+	mov rdi, 1; STDOUT
+	mov rsi, newline; New line character
+	mov rdx, 1; Length of the string
+	mov rax, 1; WRITE syscall
 	syscall
-	pop  rcx
-	pop  rsi
-	pop  rdi
-	pop  rax
-	pop  rdx
+	restore_regs rdx, rax, rdi, rsi, rcx
 	ret
 
 	; NOTE: void print_line(char* str)
@@ -247,8 +234,6 @@ pbnc_iter:
 	jmp pbnc_iter
 
 pbnc_file_end:
-	;cmp r11, 0; is_comment == true
-	;je  pbnc_print_buff
 	ret
 
 pbnc_newline:
@@ -280,33 +265,23 @@ pbnc_newline_ret:
 
 	jmp pbnc_iter
 
+pbnc_ret:
+	ret
+
+	; NOTE: void print_buff_interval(char* left_p, char* right_p)
 	; NOTE: Print buffer from `left_p` to `right_p`
-	; [PARAM] r13: char*  - left_p
-	; [PARAM] r14: char*  - right_p
+	; WARN: [PARAM] r13: char*  - left_p
+	; WARN: [PARAM] r14: char*  - right_p
 
 print_buff_interval:
-	push r8; save r8
-	push r9; save r9
-	push rax; save rax
-	;mov r8, buffer + r13
+	save_regs r8, r9, rax
 	lea  r8, [buffer + r13]; char * print_start = buffer + left_p
 	mov  rax, r14; int len = right_p
 	sub  rax, r13; len -= left_p
 	mov  r9, rax; int len_param = len
 	call print_str; print_str(print_start, len_param)
-	pop  rax; restore rax
-	pop  r9; restore r9
-	pop  r8; restore r8
+	restore_regs r8, r9, rax
 	ret
-
-pbnc_ret:
-	ret
-
-	; print not commented string
-
-pbnc_print_buff:
-	call print_buff_interval; print_comment(left_p, right_p, to_print)
-	jmp  pbnc_ret
 
 slash_found:
 	cmp r12, 0; is_slash === false
