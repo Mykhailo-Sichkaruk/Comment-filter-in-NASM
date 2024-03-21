@@ -5,7 +5,7 @@
 	section .data
 
 help_msg:
-	db "Usage: ./print_file [file1] [file2] ...", 10, "Prints the content of the files to the console", 10, "Options:", 10, "  -r: Reverse the order of the output", 10, "  -h: Show this message", 10, 0
+	db "Usage: ./print_file [file1] [file2] ...", 10, "Prints the content of the files to the console without comments", 10, "Options:", 10, "  -r: Print only comments", 10, "  -h: Show this message", 10, 0
 
 no_args_found_msg:
 	db "No arguments found", 10, 0
@@ -23,7 +23,7 @@ reverse_flag:
 	db "-r", 0
 
 is_reversed:
-	dq 0; 1 - print kjk
+	dq 0; 1 - print 
 
 comment_1:
 	db "#", 0
@@ -56,33 +56,33 @@ find_flag:
 	add rdx, 8; argv_p++; Skip the first argument argv[0] - program name
 	dec rcx; argc-- Skip the first argument argv[0] - program name
 	cmp rcx, 0; argc == 0
-	je  flag_not_found
+	je  .flag_not_found
 	mov r14, [rdx]; current argument
 
-find_flag_body:
+.find_flag_body:
 	mov  r8, r14; R8 = argv[x]
 	call compare_str; rax = strcmp(argv[x], "-r")
 	cmp  rax, 1; rax === 1
-	je   flag_found
-	jmp  find_flag_update
+	je   .flag_found
+	jmp  .find_flag_update
 
-find_flag_condition:
+.find_flag_condition:
 	cmp rcx, 0; argc == 0
-	je  flag_not_found
-	jmp find_flag_body
+	je  .flag_not_found
+	jmp .find_flag_body
 
-find_flag_update:
+.find_flag_update:
 	dec rcx; argc--
 	add rdx, 8; argv_p++
 	mov r14, [rdx]; current argument
-	jmp find_flag_condition
+	jmp .find_flag_condition
 
-flag_found:
+.flag_found:
 	mov rax, 1
 	restore_regs rcx, rdx, r14
 	ret
 
-flag_not_found:
+.flag_not_found:
 	mov rax, 0
 	restore_regs rcx, rdx, r14
 	ret

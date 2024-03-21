@@ -1,4 +1,4 @@
-%macro save_regs 0-5  ; Allows between 0 to 5 parameters
+%macro save_regs 0-6  ; Allows between 0 to 5 parameters
     %ifidn %1, %1     ; Check if the first parameter exists
         push %1
     %endif
@@ -14,9 +14,15 @@
     %ifidn %5, %5     ; Check if the fifth parameter exists
         push %5
     %endif
+    %ifidn %6, %6     ; Check if the sixth parameter exists
+        push %6
+    %endif
 %endmacro
 
-%macro restore_regs 0-5  ; Matches save_regs in terms of parameter count
+%macro restore_regs 0-6  ; Matches save_regs in terms of parameter count
+    %ifidn %6, %6     ; Check if the sixth parameter exists
+        pop %6
+    %endif
     %ifidn %5, %5     ; Check if the fifth parameter exists
         pop %5
     %endif

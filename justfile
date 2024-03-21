@@ -1,13 +1,15 @@
 start: 
-    just asmembly
-    just link
+    just build
     just run
     just clean_build
 
+build:
+    just asmembly
+    just link
 # Run
 run:
     # ./main test.asm
-    ./main test.file
+    ./main main.asm utils.asm filename.wrong
 
 # Assembly
 asmembly:

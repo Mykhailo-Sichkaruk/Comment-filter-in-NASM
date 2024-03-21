@@ -97,8 +97,6 @@ strlen_end:
 	; NOTE: Print null-terminated string
 	; NOTE: void print_str_nt(char* str)
 	; WARN: [PARAM] R8: char* str - pointer to the start of the string
-	; WARN: [LOCAL] RDX: int len  - length of the string
-	; print null-terminated string to the stdout
 
 print_str_nt:
 	save_regs rdx, rax, rdi, rsi, rcx
@@ -110,6 +108,8 @@ print_str_nt:
 	syscall ; Print the string
 	restore_regs rdx, rax, rdi, rsi, rcx
 	ret
+
+	; NOTE: Print newline character
 
 print_newline:
 	save_regs rdx, rax, rdi, rsi, rcx
@@ -141,18 +141,15 @@ exit:
 	; rax: int  - file handle [RETURN]
 
 open_file:
-	push rdi; save rdi
-	push rsi; save rsi
-	push rdx; save rdx
-	push rcx; save rcx
-	mov  rax, 2; open syscall
-	mov  rdi, r8; file name
-	mov  rsi, 0; read only
-	mov  rdx, 0; mode set
+	save_regs rdi, rsi, rdx, rcx
+	mov rax, 2; open syscall
+	mov rdi, r8; file name
+	mov rsi, 0; read only
+	mov rdx, 0; mode set
 	syscall
-	cmp  rax, 0; check if file was opened
-	jl   open_file_error; if not, print error message
-	jmp  open_file_end; if yes, return file handle
+	cmp rax, 0; check if file was opened
+	jl  open_file_error; if not, print error message
+	jmp open_file_end; if yes, return file handle
 
 open_file_error:
 	call print_line; print file name
@@ -161,34 +158,26 @@ open_file_error:
 	jmp  open_file_end
 
 open_file_end:
-	pop rcx; restore rcx
-	pop rdx; restore rdx
-	pop rsi; restore rsi
-	pop rdi; restore rdi
+	restore_regs rdi, rsi, rdx, rcx
 	ret
 
 	; NOTE: Read file content to the `buffer`
 	; [PARAM] R8 - file handle
 
 read_file_buff:
-	push rdi; save rdi
-	push rsi; save rsi
-	push rdx; save rdx
-	push rcx; save rcx
-	mov  rax, 0; read syscall
-	mov  rdi, r8; file handle
-	mov  rsi, buffer; buffer
-	mov  rdx, [buffer_length]; buffer size
+	save_regs rdi, rsi, rdx, rcx
+	mov rax, 0; read syscall
+	mov rdi, r8; file handle
+	mov rsi, buffer; buffer
+	mov rdx, [buffer_length]; buffer size
 	syscall
-	pop  rcx; restore rcx
-	pop  rdx; restore rdx
-	pop  rsi; restore rsi
-	pop  rdi; restore rdi
+	restore_regs rdi, rsi, rdx, rcx
 	ret
 
 	; NOTE: Print file
-	; [PARAM] r8: char* - file handle
-	; [PARAM] rax: bool - is_reversed; 0 - print non-commented strings, 1 - print commented strings
+	; NOTE: void print_file(char * file_handle, bool is_reversed)
+	; WARN: [PARAM] r8: char* file_handle - file handle
+	; WARN: [PARAM] rax: bool - is_reversed; 0 - print non-commented strings, 1 - print commented strings
 	; WARN: We assume that we read all file content to the buffer at once
 
 print_file:
@@ -202,13 +191,13 @@ print_file:
 	ret
 
 	; NOTE: Print buffer with/without comments
-	; [PARAM] rax: int buff_len_param    - length of the `buffer`
-	; [LOCAL] r11: bool is_comment - is comment met
-	; [LOCAL] r12: bool is_slash   - is `/` met
-	; [LOCAL] r13: *char left_p    - relative laft_pointer
-	; [LOCAL] r14: *char right_p   - relative right_p
-	; [LOCAL] bl: char c          - current byte
-	; [LOCAL] rdi: int buff_len    - length of the `buffer` (not the capacity)
+	; WARN: [PARAM] rax: int buff_len_param    - length of the `buffer`
+	; WARN: [LOCAL] r11: bool is_comment - is comment met
+	; WARN: [LOCAL] r12: bool is_slash   - is `/` met
+	; WARN: [LOCAL] r13: *char left_p    - relative laft_pointer
+	; WARN: [LOCAL] r14: *char right_p   - relative right_p
+	; WARN: [LOCAL] bl: char c          - current byte
+	; WARN: [LOCAL] rdi: int buff_len    - length of the `buffer` (not the capacity)
 
 print_buff_no_comments:
 	;   iterate over the buffer untill the `#`, `/` or `; `  is met
@@ -247,11 +236,14 @@ pbnc_newline:
 	pop  rax; restore rax
 	jne  pbnc_newline_skip; skip interval
 	call print_buff_interval; print interval
-	call print_newline; print new line
+	mov  rax, r11; tmp = is_comment
+	cmp  rax, 1; tmp === 1
+	jne  pbnc_newline_ret
+	call print_newline; print newline
 	jmp  pbnc_newline_ret
 
 pbnc_newline_skip:
-	jmp pbnc_newline_ret
+	jmp  pbnc_newline_ret
 
 pbnc_newline_ret:
 	;   else
@@ -261,8 +253,6 @@ pbnc_newline_ret:
 	inc r14; right_p++
 	mov r12, 0; is_slash = false
 	mov r11, 0; is_comment = false
-	;   Check whether this is the end of the buffer. buffer_length - 1 === right_p
-
 	jmp pbnc_iter
 
 pbnc_ret:
@@ -274,13 +264,13 @@ pbnc_ret:
 	; WARN: [PARAM] r14: char*  - right_p
 
 print_buff_interval:
-	save_regs r8, r9, rax
+	save_regs r8, r9, rax, r13, r14, r11
 	lea  r8, [buffer + r13]; char * print_start = buffer + left_p
 	mov  rax, r14; int len = right_p
 	sub  rax, r13; len -= left_p
 	mov  r9, rax; int len_param = len
 	call print_str; print_str(print_start, len_param)
-	restore_regs r8, r9, rax
+	restore_regs r8, r9, rax, r13, r14, r11
 	ret
 
 slash_found:
@@ -318,15 +308,11 @@ comment_found_skip:
 	jmp pbnc_iter
 
 	; NOTE: Print string (char* str, int len)
-	; [PARAM] r8: char* - pointer to the string
-	; [PARAM] r9: int   - length of the string
+	; WARN: [PARAM] r8: char* str - pointer to the string
+	; WARN: [PARAM] r9: int len  - length of the string
 
 print_str:
-	push    rdx; save RDX
-	push    rax; save rax
-	push    rdi; save rdi
-	push    rsi; save rsi
-	push    rcx; save rcx
+	save_regs rdx, rax, rdi, rsi, rcx
 	mov     rax, 1; WRITE syscall
 	mov     rdi, 1; set STDOUT as the file descriptor
 	mov     rsi, r8; Prepare pointer to the string
@@ -334,11 +320,7 @@ print_str:
 	syscall ; Print the string
 	cmp     rax, -1; fd == -1
 	je      print_str_error; if yes, print error message
-	pop     rcx; restore rcx
-	pop     rsi; restore rsi
-	pop     rdi; restore rdi
-	pop     rax; restore rax
-	pop     rdx; restore RDX
+	restore_regs rdx, rax, rdi, rsi, rcx
 	ret
 
 print_str_error:
